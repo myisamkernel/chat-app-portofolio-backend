@@ -1,0 +1,85 @@
+version: "1.0"
+
+services:
+  emqx-iot:
+    image: emqx-iot
+    container_name: emqx-iot
+    build:
+      dockerfile: ./dockerfile/emqx.Dockerfile
+    ports: 
+      - "18083:18083"
+      - "1883:1883"
+      - "4370:4370"
+      - "5369:5369"
+      # - "8083:8083"
+      # - "8084:8084"
+      # - "8883:8883"
+    volumes:
+      - C:/Users/samue/sslemqx:/etc/emqx/certs
+    environment:
+      - EMQX_LISTENER__SSL__EXTERNAL=8883
+      - EMQX_LISTENER__SSL__EXTERNAL__KEYFILE=/etc/emqx/certs/key.pem
+      - EMQX_LISTENER__SSL__EXTERNAL__CERTFILE=/etc/emqx/certs/cert.pem
+      - EMQX_LISTENER__SSL__EXTERNAL__CACERTFILE=/etc/emqx/certs/cacert.pem
+      - EMQX_LISTENER__SSL__EXTERNAL__VERIFY=verify_none
+      - EMQX_LISTENER__SSL__EXTERNAL__FAIL_IF_NO_PEER_CERT=false     
+    restart: unless-stopped
+    networks:
+      - seiki-iot
+
+  redis-iot:
+    image: redis-iot
+    container_name: redis-iot
+    build:
+      dockerfile: ./dockerfile/redis.Dockerfile
+    ports: 
+      - "6379:6379"
+    networks:
+      - seiki-iot
+    restart: unless-stopped
+
+  iot-backend:
+    image: iot-backend
+    container_name: iot-backend
+    build:
+      dockerfile: ./dockerfile/main.Dockerfile
+    # ports:
+      # - "80:80"
+    #   - "443:443"
+    env_file:
+      - ".env.production"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - seiki-iot
+    restart: unless-stopped
+    depends_on:
+      - emqx-iot
+      - redis-iot
+
+  caddy-iot:
+    image: caddy-iot
+    container_name: caddy-iot
+    build:
+      dockerfile: ./dockerfile/caddy.Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8883:8883"
+      - "8084:8084"
+    env_file:
+      - .env.production
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    networks:
+      - seiki-iot
+    restart: unless-stopped
+    depends_on:
+      - emqx-iot
+      - redis-iot
+      - iot-backend
+
+
+networks:
+  seiki-iot:
+    driver: bridge
